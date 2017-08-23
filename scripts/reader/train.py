@@ -212,6 +212,10 @@ def train(args, data_loader, model, global_stats):
 
     # Run one epoch
     for idx, ex in enumerate(data_loader):
+        '''
+        print('ex:::: ' + str(ex))
+        sys.exit()
+        '''
         train_loss.update(*model.update(ex))
 
         if idx % args.display_iter == 0:
@@ -249,14 +253,21 @@ def validate_unofficial(args, data_loader, model, global_stats, mode):
     examples = 0
     for ex in data_loader:
         batch_size = ex[0].size(0)
-        pred_s, pred_e, _ = model.predict(ex)
-        target_s, target_e = ex[-3:-1]
+        pred_s, _ = model.predict(ex)
+        target_s = ex[-2:-1]
+        #print('target_s, target_e: ' + str(target_s) + ' , ' + str(target_e))
+        #target_s, target_e = ex[-3:-1]
 
         # We get metrics for independent start/end and joint start/end
-        accuracies = eval_accuracies(pred_s, target_s, pred_e, target_e)
+        #print('pred_s: ' + str(pred_s) + ' target_s: ' + str(target_s[0]))
+        #sys.exit()
+        accuracies = eval_accuracies(pred_s, target_s[0])
+        #accuracies = eval_accuracies(pred_s, target_s, pred_e, target_e)
         start_acc.update(accuracies[0], batch_size)
-        end_acc.update(accuracies[1], batch_size)
-        exact_match.update(accuracies[2], batch_size)
+        #end_acc.update(accuracies[1], batch_size)
+        exact_match.update(accuracies[1], batch_size)
+        #print('accuracies: ' + str(accuracies))
+        #sys.exit()
 
         # If getting train accuracies, sample max 10k
         examples += batch_size
@@ -290,19 +301,25 @@ def validate_official(args, data_loader, model, global_stats,
     examples = 0
     for ex in data_loader:
         ex_id, batch_size = ex[-1], ex[0].size(0)
-        pred_s, pred_e, _ = model.predict(ex)
+        #print('ex_id: ' + str(ex_id))
+        #sys.exit()
+        pred_s, _ = model.predict(ex)
 
         for i in range(batch_size):
-            s_offset = offsets[ex_id[i]][pred_s[i][0]][0]
-            e_offset = offsets[ex_id[i]][pred_e[i][0]][1]
-            prediction = texts[ex_id[i]][s_offset:e_offset]
+            #s_offset = offsets[ex_id[i]][pred_s[i]]
+            #e_offset = offsets[ex_id[i]][pred_e[i][0]][1]
+            #prediction = texts[ex_id[i]][s_offset:e_offset]
+            prediction = pred_s[i]
 
             # Compute metrics
             ground_truths = answers[ex_id[i]]
+            #print('prediction: ' + str(prediction))
+            #print('ground_truths: ' + str(ground_truths))
+            #sys.exit()
             exact_match.update(utils.metric_max_over_ground_truths(
-                utils.exact_match_score, prediction, ground_truths))
-            f1.update(utils.metric_max_over_ground_truths(
-                utils.f1_score, prediction, ground_truths))
+                utils.exact_match_score_sent, prediction, ground_truths))
+            #f1.update(utils.metric_max_over_ground_truths(
+            #    utils.f1_score, prediction, ground_truths))
 
         examples += batch_size
 
@@ -314,40 +331,45 @@ def validate_official(args, data_loader, model, global_stats,
     return {'exact_match': exact_match.avg * 100, 'f1': f1.avg * 100}
 
 
-def eval_accuracies(pred_s, target_s, pred_e, target_e):
+def eval_accuracies(pred_s, target_s):
     """An unofficial evalutation helper.
     Compute exact start/end/complete match accuracies for a batch.
     """
     # Convert 1D tensors to lists of lists (compatibility)
     if torch.is_tensor(target_s):
         target_s = [[e] for e in target_s]
-        target_e = [[e] for e in target_e]
+        #target_e = [[e] for e in target_e]
 
+    #print('pred_s: ' + str(pred_s) + ' target_s: ' + str(target_s))
     # Compute accuracies from targets
     batch_size = len(pred_s)
     start = utils.AverageMeter()
-    end = utils.AverageMeter()
+    #end = utils.AverageMeter()
     em = utils.AverageMeter()
     for i in range(batch_size):
         # Start matches
+        #print('type: ' + str(type(pred_s[i])) + 'pred_s[i]: ' + str(pred_s[i]))
+        #print('type: ' + str(type(target_s[i])) + 'target_s[i]: ' + str(target_s[i]))
         if pred_s[i] in target_s[i]:
             start.update(1)
         else:
             start.update(0)
 
+        '''
         # End matches
         if pred_e[i] in target_e[i]:
             end.update(1)
         else:
             end.update(0)
+        '''
 
         # Both start and end match
-        if any([1 for _s, _e in zip(target_s[i], target_e[i])
-                if _s == pred_s[i] and _e == pred_e[i]]):
+        if any([1 for _s in target_s[i]
+                if _s == pred_s[i]]):
             em.update(1)
         else:
             em.update(0)
-    return start.avg * 100, end.avg * 100, em.avg * 100
+    return start.avg * 100, em.avg * 100
 
 
 # ------------------------------------------------------------------------------
@@ -361,6 +383,7 @@ def main(args):
     logger.info('-' * 100)
     logger.info('Load data files')
     train_exs = utils.load_data(args, args.train_file, skip_no_answer=True)
+    #print('train_exs:' + str(train_exs))
     logger.info('Num train examples = %d' % len(train_exs))
     dev_exs = utils.load_data(args, args.dev_file)
     logger.info('Num dev examples = %d' % len(dev_exs))
@@ -433,12 +456,14 @@ def main(args):
     logger.info('-' * 100)
     logger.info('Make data loaders')
     train_dataset = data.ReaderDataset(train_exs, model, single_answer=True)
+    
     if args.sort_by_len:
         train_sampler = data.SortedBatchSampler(train_dataset.lengths(),
                                                 args.batch_size,
                                                 shuffle=True)
     else:
         train_sampler = torch.utils.data.sampler.RandomSampler(train_dataset)
+
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=args.batch_size,
@@ -447,6 +472,15 @@ def main(args):
         collate_fn=vector.batchify,
         pin_memory=args.cuda,
     )
+    '''
+    for idxx, exx in enumerate(train_dataset):
+        print('train_dataset: ' + str(exx))
+    for idxx, exx in enumerate(train_loader):
+        print('train_loader: ' + str(exx))
+    #print('train_dataset:: ' + str(train_dataset))
+    sys.exit()
+    '''
+
     dev_dataset = data.ReaderDataset(dev_exs, model, single_answer=False)
     if args.sort_by_len:
         dev_sampler = data.SortedBatchSampler(dev_dataset.lengths(),
