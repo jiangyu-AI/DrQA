@@ -16,7 +16,6 @@ import pexpect
 from .tokenizer import Tokens, Tokenizer
 from . import DEFAULTS
 
-
 class CoreNLPTokenizer(Tokenizer):
 
     def __init__(self, **kwargs):
@@ -45,9 +44,14 @@ class CoreNLPTokenizer(Tokenizer):
         options = ','.join(['untokenizable=noneDelete',
                             'invertible=true'])
         cmd = ['java', '-mx' + self.mem, '-cp', '"%s"' % self.classpath,
+               'edu.stanford.nlp.pipeline.StanfordCoreNLP', '-props', 'StanfordCoreNLP-chinese.properties', '-annotators',
+               annotators, '-tokenize.options', options,
+               '-outputFormat', 'json', '-prettyPrint', 'false']
+        '''cmd = ['java', '-mx' + self.mem, '-cp', '"%s"' % self.classpath,
                'edu.stanford.nlp.pipeline.StanfordCoreNLP', '-annotators',
                annotators, '-tokenize.options', options,
                '-outputFormat', 'json', '-prettyPrint', 'false']
+        '''
 
         # We use pexpect to keep the subprocess alive and feed it commands.
         # Because we don't want to get hit by the max terminal buffer size,
@@ -98,7 +102,15 @@ class CoreNLPTokenizer(Tokenizer):
         # Skip to start of output (may have been stderr logging messages)
         output = self.corenlp.before
         start = output.find(b'{"sentences":')
-        output = json.loads(output[start:].decode('utf-8'))
+        try:
+            output = json.loads(output[start:].decode('utf-8'))
+        except:
+            print(text)
+            print(output)
+            print(start)
+            print(output[start:])#debug
+            print(output[start:].decode('utf-8'))
+            output = json.loads(output[start:].decode('utf-8'))
 
         data = []
         tokens = [t for s in output['sentences'] for t in s['tokens']]

@@ -6,7 +6,6 @@
 # LICENSE file in the root directory of this source tree.
 """DrQA Document Reader model"""
 
-import sys
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
@@ -107,6 +106,11 @@ class DocReader(object):
         with open(embedding_file) as f:
             for line in f:
                 parsed = line.rstrip().split(' ')
+                #parsed2 = line.rstrip().decode('utf-8').split(' ')
+                #print('len of line: ' + str(len(line)))
+                #print('len of parsed: ' + str(len(parsed)))
+                #print('len of parsed2: ' + str(len(parsed2)))
+                #print('embedding.size(1): ' + str(embedding.size(1)))
                 assert(len(parsed) == embedding.size(1) + 1)
                 w = self.word_dict.normalize(parsed[0])
                 if w in words:
@@ -202,11 +206,11 @@ class DocReader(object):
         self.network.train()
 
         # debug jyu
-        ''' 
+        '''
         for i_ex in range(len(ex)):
             print('ex eles: ' + str(i_ex) + ' ' + str(ex[i_ex]))
         sys.exit()
-        ''' 
+        '''
 
         # Transfer to GPU
         if self.use_cuda:
@@ -335,7 +339,6 @@ class DocReader(object):
         return pred, pred_score
 
 
-    '''
     @staticmethod
     def decode(score_s, score_e, top_n=1, max_len=None):
         """Take argmax of constrained score_s * score_e.
@@ -484,7 +487,7 @@ class DocReader(object):
         model = DocReader(args, word_dict, feature_dict, state_dict, normalize)
         model.init_optimizer(optimizer)
         return model, epoch
-    '''
+
 
     # --------------------------------------------------------------------------
     # Runtime

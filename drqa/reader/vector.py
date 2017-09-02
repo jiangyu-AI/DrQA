@@ -20,8 +20,9 @@ def vectorize(ex, model, single_answer=False):
     document = torch.LongTensor([word_dict[w] for w in ex['document']])
     question = torch.LongTensor([word_dict[w] for w in ex['question']])
 
-    sent_index_s = torch.LongTensor([sent[0] for sent in ex['sent_offsets']])
-    sent_index_e = torch.LongTensor([sent[1] for sent in ex['sent_offsets']])
+    #sent_index_s = torch.LongTensor([sent[0] for sent in ex['sent_offsets']])
+    #sent_index_e = torch.LongTensor([sent[1] for sent in ex['sent_offsets']])
+    answers = torch.LongTensor([ans for ans in ex['answers']])
 
     # Create extra features vector
     if len(feature_dict) > 0:
@@ -65,7 +66,7 @@ def vectorize(ex, model, single_answer=False):
 
     # Maybe return without target
     if 'answers' not in ex:
-        return document, features, question, ex['id'], sent_index 
+        return document, features, question, ex['id'], sent_index
 
     # ...or with target(s) (might still be empty if answers is empty)
     if single_answer:
@@ -77,7 +78,7 @@ def vectorize(ex, model, single_answer=False):
         #end = [a[1] for a in ex['answers']]
 
 
-    return document, features, question, sent_index_s, sent_index_e, start, ex['id']
+    return document, features, question, answers, answers, start, ex['id']
 
 def batchify(batch):
     """Gather a batch of individual examples into one batch."""
@@ -109,7 +110,7 @@ def batchify(batch):
 
     # Batch sentence indexes  added jyu
     max_length = max([s.size(0) for s in sent_indexes_s])
-    x1_sent_s = torch.LongTensor(len(sent_indexes_s), max_length).zero_() 
+    x1_sent_s = torch.LongTensor(len(sent_indexes_s), max_length).zero_()
     x1_sent_e = torch.LongTensor(len(sent_indexes_e), max_length).zero_()
     x1_sent_mask = torch.ByteTensor(len(sent_indexes_s), max_length).fill_(1)
     for i, s in enumerate(sent_indexes_s):
