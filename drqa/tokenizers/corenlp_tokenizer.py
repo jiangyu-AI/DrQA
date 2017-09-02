@@ -16,6 +16,7 @@ import pexpect
 from .tokenizer import Tokens, Tokenizer
 from . import DEFAULTS
 
+
 class CoreNLPTokenizer(Tokenizer):
 
     def __init__(self, **kwargs):
@@ -44,14 +45,9 @@ class CoreNLPTokenizer(Tokenizer):
         options = ','.join(['untokenizable=noneDelete',
                             'invertible=true'])
         cmd = ['java', '-mx' + self.mem, '-cp', '"%s"' % self.classpath,
-               'edu.stanford.nlp.pipeline.StanfordCoreNLP', '-props', 'StanfordCoreNLP-chinese.properties', '-annotators',
-               annotators, '-tokenize.options', options,
-               '-outputFormat', 'json', '-prettyPrint', 'false']
-        '''cmd = ['java', '-mx' + self.mem, '-cp', '"%s"' % self.classpath,
                'edu.stanford.nlp.pipeline.StanfordCoreNLP', '-annotators',
                annotators, '-tokenize.options', options,
                '-outputFormat', 'json', '-prettyPrint', 'false']
-        '''
 
         # We use pexpect to keep the subprocess alive and feed it commands.
         # Because we don't want to get hit by the max terminal buffer size,
@@ -102,18 +98,46 @@ class CoreNLPTokenizer(Tokenizer):
         # Skip to start of output (may have been stderr logging messages)
         output = self.corenlp.before
         start = output.find(b'{"sentences":')
-        try:
-            output = json.loads(output[start:].decode('utf-8'))
-        except:
-            print(text)
-            print(output)
-            print(start)
-            print(output[start:])#debug
-            print(output[start:].decode('utf-8'))
-            output = json.loads(output[start:].decode('utf-8'))
+        output = json.loads(output[start:].decode('utf-8'))
 
         data = []
+        #debug_jy
+        '''
+        print('len of ouput: (should be # of sentences)' + str(len(output['sentences'])))
+        print('sentences: ' + str(output['sentences']))
+        sys.exit()
+        print('clean_text: ' + clean_text[:53] + '\n' + clean_text[54:127])
+        tokens_sentences = output['sentences']
+        #print('tokens_sentences: ' + str(tokens_sentences[:2]))
+        for tokens_sentence in tokens_sentences:
+            print('tokens_sentence: ' + str(tokens_sentence))
+
+        pre = 0
+        for i in range(len(sentence_lens)):
+            sentence_lens[i] = sentence_lens[i] + pre
+            pre = sentence_lens[i]
+
+        index_sent_lens = 0
+        index_debug = sentence_lens[0]
+        print('index_debug' + str(index_debug))
+        print('len of tokens' + str(len(tokens)))
+        
+        '''
+
+        #debug
+        #print('len of output: ' + str(len(output)))
+        #print(str(output['sentences'][0]))
+        #print(str(output['sentences'][1]))
+        sentences = [s for s in output['sentences']]
+        sentenceOffsetBegin_list = []
+        sentenceOffsetEnd_list = []
+        for index_sentence in range(len(sentences)):
+            tokens = [t for t in sentences[index_sentence]['tokens']]
+            sentenceOffsetBegin_list.append(tokens[0]['characterOffsetBegin'])
+            sentenceOffsetEnd_list.append(tokens[-1]['characterOffsetEnd'])
+
         tokens = [t for s in output['sentences'] for t in s['tokens']]
+        index_sent = 0
         for i in range(len(tokens)):
             # Get whitespace
             start_ws = tokens[i]['characterOffsetBegin']
@@ -122,6 +146,16 @@ class CoreNLPTokenizer(Tokenizer):
             else:
                 end_ws = tokens[i]['characterOffsetEnd']
 
+            #debug
+            #print(text[start_ws: end_ws])
+            #print('start_ws: ' + str(start_ws) + ' end_ws: ' + str(end_ws))
+            #debug
+            if tokens[i]['characterOffsetBegin'] > sentenceOffsetEnd_list[index_sent]:
+                index_sent = index_sent + 1
+            #print(str(index_sent))
+            sentenceOffsetBegin = sentenceOffsetBegin_list[index_sent]
+            sentenceOffsetEnd = sentenceOffsetEnd_list[index_sent]
+
             data.append((
                 self._convert(tokens[i]['word']),
                 text[start_ws: end_ws],
@@ -129,6 +163,11 @@ class CoreNLPTokenizer(Tokenizer):
                  tokens[i]['characterOffsetEnd']),
                 tokens[i].get('pos', None),
                 tokens[i].get('lemma', None),
-                tokens[i].get('ner', None)
+                tokens[i].get('ner', None),
+                (sentenceOffsetBegin,
+                 sentenceOffsetEnd),
             ))
+        #debug
+        #print('data: ' + str(data))
+
         return Tokens(data, self.annotators)

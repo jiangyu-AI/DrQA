@@ -6,6 +6,7 @@
 # LICENSE file in the root directory of this source tree.
 """DrQA Document Reader model"""
 
+import sys
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
@@ -200,22 +201,34 @@ class DocReader(object):
         # Train mode
         self.network.train()
 
+        # debug jyu
+        ''' 
+        for i_ex in range(len(ex)):
+            print('ex eles: ' + str(i_ex) + ' ' + str(ex[i_ex]))
+        sys.exit()
+        ''' 
+
         # Transfer to GPU
         if self.use_cuda:
             inputs = [e if e is None else Variable(e.cuda(async=True))
-                      for e in ex[:5]]
-            target_s = Variable(ex[5].cuda(async=True))
-            target_e = Variable(ex[6].cuda(async=True))
+                      for e in ex[:8]]
+            target_s = Variable(ex[8].cuda(async=True))
+            #target_e = Variable(ex[9].cuda(async=True))
         else:
-            inputs = [e if e is None else Variable(e) for e in ex[:5]]
-            target_s = Variable(ex[5])
-            target_e = Variable(ex[6])
+            inputs = [e if e is None else Variable(e) for e in ex[:8]]
+            target_s = Variable(ex[8])
+            #target_e = Variable(ex[9])
 
         # Run forward
-        score_s, score_e = self.network(*inputs)
+        #score_s, score_e = self.network(*inputs)
+        score_s = self.network(*inputs)
 
+        #print('score_s: ' + str(score_s) + '\ntarget_s: ' + str(target_s))
+        #print('score_e: ' + str(score_e) + '\ntarget_e: ' + str(target_e))
+        #sys.exit()
         # Compute loss and accuracies
-        loss = F.nll_loss(score_s, target_s) + F.nll_loss(score_e, target_e)
+        loss = F.nll_loss(score_s, target_s) #+ F.nll_loss( target_e)
+        #loss = F.nll_loss(score_s, target_s) + F.nll_loss(score_e, target_e)
 
         # Clear gradients and run backward
         self.optimizer.zero_grad()
@@ -278,30 +291,51 @@ class DocReader(object):
         if self.use_cuda:
             inputs = [e if e is None else
                       Variable(e.cuda(async=True), volatile=True)
-                      for e in ex[:5]]
+                      for e in ex[:8]]
         else:
             inputs = [e if e is None else Variable(e, volatile=True)
-                      for e in ex[:5]]
+                      for e in ex[:8]]
 
         # Run forward
-        score_s, score_e = self.network(*inputs)
+        score_s = self.network(*inputs)
+        #score_s, score_e = self.network(*inputs)
 
         # Decode predictions
         score_s = score_s.data.cpu()
-        score_e = score_e.data.cpu()
+        #print('score_s: ' + str(score_s))
+        #sys.exit()
+        #score_e = score_e.data.cpu()
+        #print('candidates: ' + str(candidates))
         if candidates:
-            args = (score_s, score_e, candidates, top_n, self.args.max_len)
+            # skipped
+            #print(str(candidates))
+            args = (score_s,  candidates, top_n, self.args.max_len)
             if async_pool:
                 return async_pool.apply_async(self.decode_candidates, args)
             else:
                 return self.decode_candidates(*args)
         else:
-            args = (score_s, score_e, top_n, self.args.max_len)
+            args = (score_s,  top_n, self.args.max_len)
             if async_pool:
-                return async_pool.apply_async(self.decode, args)
+                return async_pool.apply_async(self.decode_sent, args)
             else:
-                return self.decode(*args)
+                #print('run this brunch!')
+                return self.decode_sent(*args)
 
+    @staticmethod
+    def decode_sent(score_s, top_n=1, max_len=None):
+        pred = []
+        pred_score = []
+        for i in range(score_s.size(0)):
+            scores = score_s[i].numpy()
+            idx_sort = np.argmax(scores)
+            #print(str(idx_sort) + str(scores))
+            pred.append(idx_sort)
+            pred_score.append(scores[idx_sort])
+        return pred, pred_score
+
+
+    '''
     @staticmethod
     def decode(score_s, score_e, top_n=1, max_len=None):
         """Take argmax of constrained score_s * score_e.
@@ -450,6 +484,7 @@ class DocReader(object):
         model = DocReader(args, word_dict, feature_dict, state_dict, normalize)
         model.init_optimizer(optimizer)
         return model, epoch
+    '''
 
     # --------------------------------------------------------------------------
     # Runtime
