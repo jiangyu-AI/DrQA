@@ -208,10 +208,6 @@ def exact_match_score(prediction, ground_truth):
     return normalize_answer(prediction) == normalize_answer(ground_truth)
 
 
-def exact_match_score_sent(prediction, ground_truth):
-    """Check if the prediction is a (soft) exact match with the ground truth."""
-    return prediction == ground_truth
-
 def regex_match_score(prediction, pattern):
     """Check if the prediction matches the given regular expression."""
     try:

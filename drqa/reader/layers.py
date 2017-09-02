@@ -72,7 +72,6 @@ class StackedBRNN(nn.Module):
 
         # Encode all layers
         outputs = [x]
-        # default num_layers = 3
         for i in range(self.num_layers):
             rnn_input = outputs[-1]
 
@@ -303,34 +302,8 @@ def uniform_weights(x, x_mask):
     alpha = alpha / alpha.sum(1).expand(alpha.size())
     return alpha
 
-def uniform_weights_sentence(x, x_mask):
-    """Return uniform weights over non-masked x (a sequence of vectors) at sentence level.
-
-    Args:
-        x: batch * len * hdim
-        x_mask: batch * len (1 for padding, 0 for true)
-    Output:
-        x_avg: batch * sentence * hdim
-    """
-    alpha = Variable(torch.ones(1, x[0].size(1)))
-    if x.data.is_cuda:
-        alpha = alpha.cuda()
-    alpha = alpha * x_mask.eq(0).float()
-    alpha = alpha / alpha.sum(1).expand(alpha.size())
-    return alpha
 
 def weighted_avg(x, weights):
-    """Return a weighted average of x (a sequence of vectors).
-
-    Args:
-        x: batch * len * hdim
-        weights: batch * len, sum(dim = 1) = 1
-    Output:
-        x_avg: batch * hdim
-    """
-    return weights.unsqueeze(1).bmm(x).squeeze(1)
-
-def weighted_avg_sentence(x, weights):
     """Return a weighted average of x (a sequence of vectors).
 
     Args:

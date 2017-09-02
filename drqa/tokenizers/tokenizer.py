@@ -17,8 +17,6 @@ class Tokens(object):
     POS = 3
     LEMMA = 4
     NER = 5
-    SENT_SPAN = 6
-
 
     def __init__(self, data, annotators, opts=None):
         self.data = data
@@ -53,11 +51,6 @@ class Tokens(object):
     def offsets(self):
         """Returns a list of [start, end) character offsets of each token."""
         return [t[self.SPAN] for t in self.data]
-
-    #add sentence offset jyu
-    def sent_offsets(self):
-        """Returns a list of [start, end) character offsets of each sentence."""
-        return [t[self.SENT_SPAN] for t in self.data]
 
     def pos(self):
         """Returns a list of part-of-speech tags of each token.

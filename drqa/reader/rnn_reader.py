@@ -5,8 +5,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 """Implementation of the RNN based DrQA reader."""
-import sys
-import numpy
+
 import torch
 import torch.nn as nn
 from . import layers
@@ -88,13 +87,11 @@ class RnnDocReader(nn.Module):
             normalize=normalize,
         )
 
-
-    def forward(self, x1, x1_f, x1_mask, x2, x2_mask, x1_sentence_s, x1_sentence_e, x1_sentence_mask):
+    def forward(self, x1, x1_f, x1_mask, x2, x2_mask):
         """Inputs:
         x1 = document word indices             [batch * len_d]
         x1_f = document word features indices  [batch * len_d * nfeat]
         x1_mask = document padding mask        [batch * len_d]
-	x1_sentence = document sentence indices[batch * len_d_sentences]
         x2 = question word indices             [batch * len_q]
         x2_mask = question padding mask        [batch * len_q]
         """
@@ -122,41 +119,7 @@ class RnnDocReader(nn.Module):
             drnn_input.append(x1_f)
 
         # Encode document with RNN
-        doc_hiddens_wordlevel = self.doc_rnn(torch.cat(drnn_input, 2), x1_mask)
-
-        '''
-        # Add average pooling for document sentence
-        print('x1: ' + str(x1))
-        print('x1_f: ' + str(x1_f))
-        print('x1_mask: ' + str(x1_mask))
-        print('x2: ' + str(x2))
-        print('x2_mask: ' + str(x2_mask))
-        print('x1_sentence: ' + str(x1_sentence))
-        print('doc_hiddens_wordlevel type: ' + str(type(doc_hiddens_wordlevel)))
-        print('doc_hiddens_wordleve: ' + str(doc_hiddens_wordlevel))
-        question_hiddens = self.question_rnn(x2_emb, x2_mask)
-        print('question_hiddens: ' + str(question_hiddens))
-        print('x2_mask: ' + str(x2_mask))
-        doc_hidden = []
-        for batch_i in range(len(x1_sentence)):
-            sent_cur = 0
-            doc_hiddens = []
-            for sent in x1_sentence[batch_i]:
-                sent_pre = sent_cur
-                sent_cur = int(sent.data.numpy()[0])
-                print('type of sent_cur: ' + str(type(sent_cur)))
-                print('sent_cur: ' + str(sent_cur) + '; sent_pre: ' + str(sent_pre))
-                print('len of doc_hiddens_wordlevel: ' + str(len(doc_hiddens_wordlevel[batch_i])))
-                print('len of x1_mask: ' + str(len(x1_mask[batch_i])))
-                doc_merge_weights = layers.uniform_weights_sentence([doc_hiddens_wordlevel[batch_i][sent_pre:sent_cur]], [x1_mask[batch_i][sent_pre:sent_cur]])
-                doc_hidden_sentence = layers.weighted_avg_sentence([doc_hiddens_wordlevel[batch_i][sent_pre:sent_cur]], doc_merge_weights)
-                doc_hiddens.extend(doc_hidden_sentence)
-                doc_hidden_batch = ' '.join(doc_hiddens)
-                doc_hidden.append(doc_hidden_batch)
-
-	doc_merge_weights = layers.uniform_weights_sentence(x1_sentence, doc_hiddens_wordlevel, x1_mask)
-	doc_hidden = layers.weighted_avg_sentence(x1_sentence, doc_hiddens_wordlevel, doc_merge_weights)
-        '''
+        doc_hiddens = self.doc_rnn(torch.cat(drnn_input, 2), x1_mask)
 
         # Encode question with RNN + merge hiddens
         question_hiddens = self.question_rnn(x2_emb, x2_mask)
@@ -166,37 +129,7 @@ class RnnDocReader(nn.Module):
             q_merge_weights = self.self_attn(question_hiddens, x2_mask)
         question_hidden = layers.weighted_avg(question_hiddens, q_merge_weights)
 
-
-        def get_doc_sent(doc_word, indices):
-            doc_sent = []
-            for i in range(doc_word.size(0)):
-                tensor_tmp = torch.index_select(doc_word[i], 0, indices[i])
-                doc_sent.append(torch.unsqueeze(tensor_tmp, 0))
-            return torch.cat(doc_sent, 0)
-        doc_hiddens_start = get_doc_sent(doc_hiddens_wordlevel, x1_sentence_s)
-        doc_hiddens_end = get_doc_sent(doc_hiddens_wordlevel, x1_sentence_e)
-        doc_hiddens_cat = torch.cat((torch.unsqueeze(doc_hiddens_start, 0), torch.unsqueeze(doc_hiddens_end, 0)), 0)
-        doc_hiddens = torch.mean(doc_hiddens_cat, 0).squeeze(0)        
-        '''
-        print('x1_sentence_s: ' + str(x1_sentence_s))
-        print('x1_sentence_e: ' + str(x1_sentence_e))
-        print('doc_hiddens_start: ' + str(doc_hiddens_start))
-        print('doc_hiddens_end: ' + str(doc_hiddens_end))
-        print('x1_sentence_mask: ' + str(x1_sentence_mask))
-        print('doc_hiddens_wordlevel: ' + str(doc_hiddens_wordlevel))
-        print('doc_hiddens_start: ' + str(doc_hiddens_start))
-        print('doc_hiddens_end: ' + str(doc_hiddens_end))
-        print('doc_hiddens: ' + str(doc_hiddens))
-        print('question_hidden: ' + str(question_hidden))
-        sys.exit()
-
-        for batch_i in range(x1_sentence.size(0)):
-            indices = x1_sentence[batch_i:batch_i+1]
-            doc_hiddens[batch_i,:,:].copy_(torch.index_select(doc_hiddens_wordlevel[batch_i:batch_i+1], 1, indices))
-        '''
-
-
         # Predict start and end positions
-        start_scores = self.start_attn(doc_hiddens, question_hidden, x1_sentence_mask)
-        #end_scores = self.end_attn(doc_hiddens, question_hidden, x1_mask)
-        return start_scores#, end_scores
+        start_scores = self.start_attn(doc_hiddens, question_hidden, x1_mask)
+        end_scores = self.end_attn(doc_hiddens, question_hidden, x1_mask)
+        return start_scores, end_scores
